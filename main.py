@@ -33,6 +33,15 @@ def db_init():
             vaqt TEXT NOT NULL
         )"""
     )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS arizalar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ism TEXT NOT NULL,
+            telefon TEXT NOT NULL,
+            tajriba TEXT NOT NULL,
+            vaqt TEXT NOT NULL
+        )"""
+    )
     conn.commit()
     conn.close()
 
@@ -67,6 +76,48 @@ async def buyurtma_qabul(request: Request):
     conn.commit()
     conn.close()
     return {"holat": "qabul qilindi", "ism": ism}
+
+
+@app.post("/ariza")
+async def ariza_qabul(request: Request):
+    data = await request.json()
+    ism = str(data.get("ism", "")).strip()
+    telefon = str(data.get("telefon", "")).strip()
+    tajriba = str(data.get("tajriba", "")).strip()
+    conn = sqlite3.connect(DB)
+    conn.execute(
+        "INSERT INTO arizalar (ism, telefon, tajriba, vaqt) VALUES (?,?,?,?)",
+        (ism, telefon, tajriba, datetime.utcnow().isoformat()),
+    )
+    conn.commit()
+    conn.close()
+    return {"holat": "qabul qilindi", "ism": ism}
+
+
+@app.get("/admin-ariza")
+def admin_ariza_royxat():
+    conn = sqlite3.connect(DB)
+    rows = conn.execute(
+        "SELECT id, ism, telefon, tajriba, vaqt FROM arizalar ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    satrlar = "".join(
+        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td></tr>"
+        for r in rows
+    )
+    html = f"""<html><head><meta charset="utf-8"><title>Arizalar</title>
+    <style>
+    body{{font-family:Arial;padding:24px;background:#fdf6ec;}}
+    table{{border-collapse:collapse;width:100%;background:#fff;}}
+    th,td{{border:1px solid #ddd;padding:10px;text-align:left;}}
+    th{{background:#f5a623;color:#1f2833;}}
+    h1{{color:#1f2833;}}
+    </style></head><body>
+    <h1>Avtomexanik arizalari ({len(rows)} ta)</h1>
+    <table><tr><th>ID</th><th>Ism</th><th>Telefon</th><th>Tajriba</th><th>Vaqt</th></tr>
+    {satrlar}
+    </table></body></html>"""
+    return HTMLResponse(html)
 
 
 @app.get("/admin")
