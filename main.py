@@ -1,9 +1,13 @@
+import logging
 import sqlite3
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, JSONResponse
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("buyurtma")
 
 app = FastAPI()
 
@@ -36,11 +40,11 @@ def db_init():
 db_init()
 
 
-class Buyurtma(BaseModel):
-    ism: str
-    telefon: str
-    mahsulot: str
-    miqdor: str
+@app.exception_handler(RequestValidationError)
+async def validation_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    log.info("422 VALIDATION FAIL | body=%r | errors=%s", body, exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors(), "xom_body": body.decode(errors="replace")})
 
 
 @app.get("/")
@@ -49,15 +53,20 @@ def home():
 
 
 @app.post("/buyurtma")
-def buyurtma_qabul(b: Buyurtma):
+async def buyurtma_qabul(request: Request):
+    data = await request.json()
+    ism = str(data.get("ism", "")).strip()
+    telefon = str(data.get("telefon", "")).strip()
+    mahsulot = str(data.get("mahsulot", "")).strip()
+    miqdor = str(data.get("miqdor", "")).strip()
     conn = sqlite3.connect(DB)
     conn.execute(
         "INSERT INTO buyurtmalar (ism, telefon, mahsulot, miqdor, vaqt) VALUES (?,?,?,?,?)",
-        (b.ism, b.telefon, b.mahsulot, b.miqdor, datetime.utcnow().isoformat()),
+        (ism, telefon, mahsulot, miqdor, datetime.utcnow().isoformat()),
     )
     conn.commit()
     conn.close()
-    return {"holat": "qabul qilindi", "ism": b.ism}
+    return {"holat": "qabul qilindi", "ism": ism}
 
 
 @app.get("/admin")
